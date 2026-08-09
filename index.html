@@ -524,14 +524,35 @@
 <!-- 1. CONSULTA -->
 <div class="screen active" id="screen-consulta">
   <div class="search-hero">
-    <h2>Consulta de Placa</h2>
-    <p>Ingrese la placa del vehículo para verificar su registro</p>
+    <h2>Consulta Vehicular</h2>
+    <p>Busque por placa o por torre y apartamento</p>
   </div>
-  <div class="search-box">
+  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:22px">
+    <button class="nav-btn active" id="tabPlaca" onclick="setSearchMode('placa')" style="padding:9px 18px">🔎 Por Placa</button>
+    <button class="nav-btn" id="tabApto" onclick="setSearchMode('apto')" style="padding:9px 18px">🏢 Por Torre / Apto</button>
+  </div>
+  <div class="search-box" id="searchBoxPlaca">
     <input type="text" class="plate-input" id="plateInput" placeholder="ABC 123" maxlength="8"
       oninput="this.value=this.value.toUpperCase()"
       onkeydown="if(event.key==='Enter')doSearch()">
     <button class="search-btn" onclick="doSearch()">BUSCAR</button>
+  </div>
+  <div class="search-box" id="searchBoxApto" style="display:none">
+    <select class="filter-input" id="aptoTowerInput" style="max-width:160px;height:56px;font-size:16px">
+      <option value="">Torre</option>
+      <option value="T1">Torre 1</option>
+      <option value="T2">Torre 2</option>
+      <option value="T3">Torre 3</option>
+      <option value="T4">Torre 4</option>
+      <option value="T5">Torre 5</option>
+      <option value="T6">Torre 6</option>
+      <option value="T7">Torre 7</option>
+      <option value="T8">Torre 8</option>
+    </select>
+    <input type="text" class="plate-input" id="aptoInput" placeholder="APTO" maxlength="6" style="letter-spacing:2px"
+      oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+      onkeydown="if(event.key==='Enter')doSearchByApto()">
+    <button class="search-btn" onclick="doSearchByApto()">BUSCAR</button>
   </div>
   <div id="searchResult"></div>
 </div>
@@ -548,6 +569,12 @@
       <option value="">Todas las torres</option>
       <option value="T1">Torre 1</option>
       <option value="T2">Torre 2</option>
+      <option value="T3">Torre 3</option>
+      <option value="T4">Torre 4</option>
+      <option value="T5">Torre 5</option>
+      <option value="T6">Torre 6</option>
+      <option value="T7">Torre 7</option>
+      <option value="T8">Torre 8</option>
     </select>
     <select class="filter-input" style="max-width:160px" id="typeFilter" onchange="filterTable()">
       <option value="">Todos los tipos</option>
@@ -911,6 +938,85 @@ function checkPwd() {
 // ═══════════════════════════════════════════════════════
 function normalPlate(p) { return p.replace(/[\s\.\-]/g,'').toUpperCase(); }
 
+function setSearchMode(mode) {
+  document.getElementById('tabPlaca').classList.toggle('active', mode === 'placa');
+  document.getElementById('tabApto').classList.toggle('active', mode === 'apto');
+  document.getElementById('searchBoxPlaca').style.display = mode === 'placa' ? 'flex' : 'none';
+  document.getElementById('searchBoxApto').style.display = mode === 'apto' ? 'flex' : 'none';
+  document.getElementById('searchResult').innerHTML = '';
+}
+
+function doSearchByApto() {
+  const tower = document.getElementById('aptoTowerInput').value;
+  const apto = document.getElementById('aptoInput').value.trim();
+  if (!tower) { showToast('Seleccione la torre', 'error'); return; }
+  if (!apto) { showToast('Ingrese el número de apartamento', 'error'); return; }
+
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
+  if (rec) {
+    renderApartmentCard(rec);
+  } else {
+    renderNotFoundApto(tower, apto);
+  }
+}
+
+function renderApartmentCard(rec) {
+  const container = document.getElementById('searchResult');
+  const towerNum = rec.tower.replace('T','');
+
+  const allPlates = rec.plates.map(p =>
+    `<span class="tag-plate owner">${p}</span>`
+  ).join('') || '<span style="color:var(--muted);font-size:13px">Sin placas registradas</span>';
+  const allVisitors = rec.visitors.map(v =>
+    `<span class="tag-plate visitor">${v}</span>`
+  ).join('');
+
+  const inmobHtml = rec.inmobiliaria
+    ? `<div class="ficha-row"><div class="ficha-row-icon">🏢</div><div><div class="ficha-row-label">Inmobiliaria / Arrendatario</div><div class="ficha-row-value">${rec.inmobiliaria}</div></div></div>` : '';
+  const depHtml = rec.deposito
+    ? `<div class="ficha-row"><div class="ficha-row-icon">🅿️</div><div><div class="ficha-row-label">Depósito de Parqueadero</div><div class="ficha-row-value">${rec.deposito}</div></div></div>` : '';
+  const visitHtml = rec.visitors.length
+    ? `<div class="ficha-row"><div class="ficha-row-icon">🔄</div><div><div class="ficha-row-label">Visitantes Recurrentes</div><div class="ficha-row-value">${allVisitors}</div></div></div>` : '';
+
+  const callHtml = rec.phone
+    ? `<a href="tel:${rec.phone.replace(/\s/g,'')}"><button class="action-btn btn-call">📞 Llamar · ${rec.phone}</button></a>` : '';
+
+  container.innerHTML = `
+  <div class="result-card">
+    <div class="ficha">
+      <div class="ficha-header">
+        <div class="ficha-icon residente">🏠</div>
+        <div class="ficha-header-text">
+          <h3>Ficha de Apartamento</h3>
+          <h2>${rec.owner || '— Sin propietario registrado —'}</h2>
+        </div>
+        <div class="ficha-plate-badge">
+          <div class="plate-num">${towerNum}-${rec.apto}</div>
+          <small>Torre · Apto</small>
+        </div>
+      </div>
+      <div class="ficha-body">
+        <div class="ficha-row"><div class="ficha-row-icon">🏢</div><div><div class="ficha-row-label">Apartamento · Torre</div><div class="ficha-row-value">Apto <strong>${rec.apto}</strong> · Torre <strong>${towerNum}</strong></div></div></div>
+        <div class="ficha-row"><div class="ficha-row-icon">📱</div><div><div class="ficha-row-label">Teléfono / Celular</div><div class="ficha-row-value">${rec.phone || '— No registrado —'}</div></div></div>
+        <div class="ficha-row"><div class="ficha-row-icon">✉️</div><div><div class="ficha-row-label">Correo Electrónico</div><div class="ficha-row-value" style="font-size:13px">${rec.email || '—'}</div></div></div>
+        <div class="ficha-row"><div class="ficha-row-icon">🚗</div><div><div class="ficha-row-label">Carros a su nombre (${rec.plates.length})</div><div class="ficha-row-value"><div class="tag-plates">${allPlates}</div></div></div></div>
+        ${visitHtml}${inmobHtml}${depHtml}
+      </div>
+      <div class="ficha-actions">${callHtml}</div>
+    </div>
+  </div>`;
+}
+
+function renderNotFoundApto(tower, apto) {
+  document.getElementById('searchResult').innerHTML = `
+  <div class="not-found-card">
+    <div class="emoji">🔍</div>
+    <h3>Apartamento No Encontrado</h3>
+    <p>No se encontró el Apto <strong style="color:var(--white)">${apto}</strong> de la Torre <strong style="color:var(--white)">${tower.replace('T','')}</strong> en la base de datos del Conjunto Balcones del Mar.<br><br>
+    Verifique el número de torre y apartamento. Si debe ser registrado, acceda a la sección de Gestión.</p>
+  </div>`;
+}
+
 function doSearch() {
   const raw = document.getElementById('plateInput').value.trim();
   if (!raw) return;
@@ -1050,12 +1156,14 @@ function renderStats() {
   const total = db.length;
   const totalPlates = db.reduce((a, r) => a + r.plates.length, 0);
   const totalVisitors = db.reduce((a, r) => a + r.visitors.length, 0);
-  const t1 = db.filter(r => r.tower === 'T1').length;
+  const towers = ['T1','T2','T3','T4','T5','T6','T7','T8'];
+  const perTower = towers.map(t => db.filter(r => r.tower === t).length);
+  const towerSummary = towers.map((t,i) => `T${i+1}:${perTower[i]}`).join(' · ');
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">Apartamentos</div></div>
     <div class="stat-card"><div class="stat-num">${totalPlates}</div><div class="stat-label">Placas Propietarios</div></div>
     <div class="stat-card"><div class="stat-num">${totalVisitors}</div><div class="stat-label">Visitantes Recurrentes</div></div>
-    <div class="stat-card"><div class="stat-num">${t1}·${total-t1}</div><div class="stat-label">Torre 1 · Torre 2</div></div>`;
+    <div class="stat-card"><div class="stat-num" style="font-size:15px;letter-spacing:0">${towerSummary}</div><div class="stat-label">Apartamentos por Torre (1-8)</div></div>`;
 }
 
 function renderTableBody() {
@@ -1071,7 +1179,7 @@ function renderTableBody() {
   document.getElementById('tableBody').innerHTML = page.map((r, i) => {
     const tNum = r.tower.replace('T','');
     const delBtn = canDelete
-      ? `<button class="delete-row-btn" onclick="promptDelete('${r.matchPlate}','${r.apto}','${r.plateType}')">🗑 Eliminar</button>`
+      ? `<button class="delete-row-btn" onclick="promptDelete('${r.matchPlate}','${r.tower}','${r.apto}','${r.plateType}')">🗑 Eliminar</button>`
       : '—';
     return `<tr>
       <td><span class="badge-tower">Torre ${tNum}</span></td>
@@ -1129,7 +1237,7 @@ function openAddModal() {
   sel.innerHTML = '<option value="">Seleccione apartamento…</option>';
   db.forEach(r => {
     const o = document.createElement('option');
-    o.value = r.apto;
+    o.value = r.tower + '|' + r.apto;
     o.textContent = `${r.apto} — Torre ${r.tower.replace('T','')} — ${r.owner.substring(0,30)}`;
     sel.appendChild(o);
   });
@@ -1140,30 +1248,31 @@ function openAddModal() {
 
 function addPlate() {
   const plate = document.getElementById('newPlate').value.trim().toUpperCase();
-  const apto = document.getElementById('newApto').value;
+  const selVal = document.getElementById('newApto').value;
   const type = document.getElementById('newType').value;
 
   if (!plate || plate.length < 4) { showToast('Ingrese una placa válida (mínimo 4 caracteres)', 'error'); return; }
-  if (!apto) { showToast('Seleccione un apartamento', 'error'); return; }
+  if (!selVal) { showToast('Seleccione un apartamento', 'error'); return; }
+  const [tower, apto] = selVal.split('|');
 
   // Check duplicate
   const clean = normalPlate(plate);
   for (const r of db) {
     for (const p of [...r.plates, ...r.visitors]) {
       if (normalPlate(p.replace(/\(.*\)/g,'')) === clean) {
-        showToast(`⚠️ La placa ${plate} ya está registrada en el Apto ${r.apto}`, 'error');
+        showToast(`⚠️ La placa ${plate} ya está registrada en el Apto ${r.apto} — Torre ${r.tower.replace('T','')}`, 'error');
         return;
       }
     }
   }
 
-  const rec = db.find(r => r.apto === apto);
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
   if (!rec) return;
 
   if (type === 'owner') rec.plates.push(plate);
   else rec.visitors.push(plate);
 
-  changelog.push({ action: 'add', plate, apto, type, date: new Date().toISOString(), by: currentRole });
+  changelog.push({ action: 'add', plate, tower, apto, type, date: new Date().toISOString(), by: currentRole });
   saveDB();
   closeModal('addModal');
   showToast(`✅ Placa ${plate} registrada en Apto ${apto}`, 'success');
@@ -1173,21 +1282,21 @@ function addPlate() {
 // ═══════════════════════════════════════════════════════
 // DELETE PLATE
 // ═══════════════════════════════════════════════════════
-function promptDelete(plate, apto, type) {
-  deletePending = { plate, apto, type };
+function promptDelete(plate, tower, apto, type) {
+  deletePending = { plate, tower, apto, type };
   document.getElementById('deleteTarget').textContent = plate;
   document.getElementById('deleteModal').classList.remove('hidden');
 }
 
 function confirmDelete() {
   if (!deletePending) return;
-  const { plate, apto, type } = deletePending;
-  const rec = db.find(r => r.apto === apto);
+  const { plate, tower, apto, type } = deletePending;
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
   if (rec) {
     if (type === 'owner') rec.plates = rec.plates.filter(p => p !== plate);
     else rec.visitors = rec.visitors.filter(v => v !== plate);
   }
-  changelog.push({ action: 'delete', plate, apto, type, date: new Date().toISOString(), by: currentRole });
+  changelog.push({ action: 'delete', plate, tower, apto, type, date: new Date().toISOString(), by: currentRole });
   saveDB();
   closeModal('deleteModal');
   deletePending = null;
@@ -1200,28 +1309,33 @@ function confirmDelete() {
 // ═══════════════════════════════════════════════════════
 function renderAdminStats() {
   const area = document.getElementById('statsChartArea');
-  // Count plates by tower
-  const t1p = db.filter(r=>r.tower==='T1').reduce((a,r)=>a+r.plates.length,0);
-  const t2p = db.filter(r=>r.tower==='T2').reduce((a,r)=>a+r.plates.length,0);
-  const t1v = db.filter(r=>r.tower==='T1').reduce((a,r)=>a+r.visitors.length,0);
-  const t2v = db.filter(r=>r.tower==='T2').reduce((a,r)=>a+r.visitors.length,0);
+  const towers = ['T1','T2','T3','T4','T5','T6','T7','T8'];
+  const colorsP = ['#2e6fc5','#2864b3','#2359a1','#1e4e90','#19437e','#14386c','#0f2d5b','#0a2249'];
+  const colorsV = ['#c8a94a','#bd9f45','#b19540','#a68b3b','#9a8136','#8f7731','#836d2c','#786327'];
+  const platesByTower = towers.map(t => db.filter(r=>r.tower===t).reduce((a,r)=>a+r.plates.length,0));
+  const visitorsByTower = towers.map(t => db.filter(r=>r.tower===t).reduce((a,r)=>a+r.visitors.length,0));
+  const totalPlates = platesByTower.reduce((a,b)=>a+b,0);
+  const totalVisitors = visitorsByTower.reduce((a,b)=>a+b,0);
   const withEmail = db.filter(r=>r.email && r.email.trim() && r.email !== r.owner).length;
   const noPlates = db.filter(r=>r.plates.length===0).length;
 
   area.innerHTML = `
     <div class="report-stats">
-      <div class="rstat"><div class="rstat-num">${t1p+t2p}</div><div class="rstat-label">Total Placas</div></div>
-      <div class="rstat"><div class="rstat-num">${t1v+t2v}</div><div class="rstat-label">Visitantes Recurrentes</div></div>
+      <div class="rstat"><div class="rstat-num">${totalPlates}</div><div class="rstat-label">Total Placas</div></div>
+      <div class="rstat"><div class="rstat-num">${totalVisitors}</div><div class="rstat-label">Visitantes Recurrentes</div></div>
       <div class="rstat"><div class="rstat-num">${withEmail}</div><div class="rstat-label">Aptos con Correo</div></div>
       <div class="rstat"><div class="rstat-num">${noPlates}</div><div class="rstat-label">Aptos sin Placa</div></div>
     </div>
     <div style="margin-top:20px;background:rgba(10,22,40,0.5);border:1px solid var(--border);border-radius:10px;padding:16px">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">Distribución por Torre</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">Placas de Propietarios por Torre</div>
       <div style="display:flex;gap:8px;align-items:flex-end;height:100px">
-        ${makeBar('T1 Propietarios', t1p, t1p+t2p, '#2e6fc5')}
-        ${makeBar('T2 Propietarios', t2p, t1p+t2p, '#1a5ab5')}
-        ${makeBar('T1 Visitantes', t1v, Math.max(t1v+t2v,1), '#c8a94a')}
-        ${makeBar('T2 Visitantes', t2v, Math.max(t1v+t2v,1), '#a88930')}
+        ${towers.map((t,i) => makeBar('T'+(i+1), platesByTower[i], Math.max(totalPlates,1), colorsP[i])).join('')}
+      </div>
+    </div>
+    <div style="margin-top:12px;background:rgba(10,22,40,0.5);border:1px solid var(--border);border-radius:10px;padding:16px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">Visitantes Recurrentes por Torre</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;height:100px">
+        ${towers.map((t,i) => makeBar('T'+(i+1), visitorsByTower[i], Math.max(totalVisitors,1), colorsV[i])).join('')}
       </div>
     </div>
     <div style="margin-top:12px;background:rgba(10,22,40,0.5);border:1px solid var(--border);border-radius:10px;padding:16px">
@@ -1337,7 +1451,7 @@ function exportExcel() {
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [{wch:6},{wch:6},{wch:45},{wch:40},{wch:30},{wch:22},{wch:28},{wch:4},{wch:16},{wch:18}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Base de datos T1 y T2');
+  XLSX.utils.book_append_sheet(wb, ws, 'Base de datos T1-T8');
   XLSX.writeFile(wb, `BALCONES_DEL_MAR_Base_Vehicular_${new Date().toISOString().slice(0,10)}.xlsx`);
   showToast('📥 Excel descargado correctamente', 'success');
 }
