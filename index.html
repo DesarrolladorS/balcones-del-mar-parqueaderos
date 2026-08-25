@@ -679,7 +679,7 @@
 <!-- Add Plate -->
 <div class="modal-overlay hidden" id="addModal">
   <div class="modal">
-    <h3>➕ Registrar Nueva Placa</h3>
+    <h3>➕ Registrar Nuevo Vehículo</h3>
     <div class="modal-field">
       <label>Placa *</label>
       <input type="text" id="newPlate" placeholder="ABC123" maxlength="8" style="letter-spacing:3px;text-transform:uppercase;font-size:20px;text-align:center"
@@ -687,20 +687,29 @@
     </div>
     <div class="modal-field">
       <label>Apartamento *</label>
-      <select id="newApto">
+      <select id="newApto" onchange="prefillContactFields()">
         <option value="">Seleccione apartamento…</option>
       </select>
     </div>
     <div class="modal-field">
-      <label>Tipo de Placa *</label>
-      <select id="newType" onchange="document.getElementById('newVisitorNameField').style.display = this.value==='visitor' ? 'block' : 'none'">
-        <option value="owner">Propietario / Residente</option>
+      <label>Tipo de Registro *</label>
+      <select id="newType" onchange="toggleAddModalFields()">
+        <option value="owner">Propietario</option>
+        <option value="tenant">Arrendatario</option>
         <option value="visitor">Visitante Recurrente</option>
       </select>
     </div>
-    <div class="modal-field" id="newVisitorNameField" style="display:none">
-      <label>Nombre del Visitante</label>
-      <input type="text" id="newVisitorName" placeholder="Nombre completo (opcional)">
+    <div class="modal-field" id="newNameField" style="display:none">
+      <label id="newNameLabel">Nombre</label>
+      <input type="text" id="newNameInput" placeholder="Nombre completo">
+    </div>
+    <div class="modal-field">
+      <label>Celular / Teléfono</label>
+      <input type="text" id="newPhone" placeholder="Opcional — actualiza el teléfono del apto">
+    </div>
+    <div class="modal-field">
+      <label>Correo Electrónico</label>
+      <input type="text" id="newEmail" placeholder="Opcional — actualiza el correo del apto">
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('addModal')">Cancelar</button>
@@ -710,6 +719,7 @@
 </div>
 
 <!-- Edit Owner/Tenant Name -->
+
 <div class="modal-overlay hidden" id="editNameModal">
   <div class="modal">
     <h3 id="editNameTitle">✏️ Editar Nombre</h3>
@@ -720,6 +730,38 @@
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('editNameModal')">Cancelar</button>
       <button class="btn-primary" onclick="confirmEditName()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Full Apartment (solo Administración) -->
+<div class="modal-overlay hidden" id="editAptoModal">
+  <div class="modal">
+    <h3>👑 Editar Apartamento (Administración)</h3>
+    <p style="font-size:12px;color:var(--muted);margin:-6px 0 14px" id="editAptoSubtitle"></p>
+    <div class="modal-field">
+      <label>Propietario</label>
+      <input type="text" id="editAptoOwner" placeholder="Nombre del propietario">
+    </div>
+    <div class="modal-field">
+      <label>Arrendatario</label>
+      <input type="text" id="editAptoTenant" placeholder="Nombre del arrendatario">
+    </div>
+    <div class="modal-field">
+      <label>Correo Electrónico</label>
+      <input type="text" id="editAptoEmail" placeholder="correo@ejemplo.com">
+    </div>
+    <div class="modal-field">
+      <label>Celular / Teléfono</label>
+      <input type="text" id="editAptoPhone" placeholder="300 000 0000">
+    </div>
+    <div class="modal-field">
+      <label>Depósito de Parqueadero</label>
+      <input type="text" id="editAptoDeposito" placeholder="Opcional">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('editAptoModal')">Cancelar</button>
+      <button class="btn-primary" onclick="confirmEditApto()">Guardar Cambios</button>
     </div>
   </div>
 </div>
@@ -1359,6 +1401,7 @@ function renderTableBody() {
   const start = (currentPage - 1) * ROWS_PER_PAGE;
   const page = filteredRows.slice(start, start + ROWS_PER_PAGE);
   const canDelete = currentRole === 'porteria' || currentRole === 'admon';
+  const canEditApto = currentRole === 'admon';
 
   if (!page.length) {
     document.getElementById('tableBody').innerHTML = `<tr><td colspan="7" class="empty-state">No se encontraron resultados</td></tr>`;
@@ -1370,6 +1413,9 @@ function renderTableBody() {
     const delBtn = canDelete
       ? `<button class="delete-row-btn" onclick="promptDelete('${r.matchPlate}','${r.tower}','${r.apto}','${r.plateType}')">🗑 Eliminar</button>`
       : '—';
+    const editBtn = canEditApto
+      ? `<button class="mini-edit-btn" onclick="openEditApto('${r.tower}','${r.apto}')" style="margin-left:0">✏️ Editar Apto</button>`
+      : '';
     const residente = r.owner || r.tenant || '—';
     const plateLabel = r.plateType === 'visitor' && r.matchName ? `${r.matchName} — ${r.matchPlate}` : r.matchPlate;
     return `<tr>
@@ -1379,8 +1425,9 @@ function renderTableBody() {
       <td><span class="tag-plate ${r.plateType}">${plateLabel}</span></td>
       <td>${r.plateType === 'visitor' ? '<span class="badge-visitante">Visitante</span>' : 'Propietario'}</td>
       <td>${r.phone || '—'}</td>
-      <td>${delBtn}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${editBtn}${delBtn}</td>
     </tr>`;
+
   }).join('');
 }
 
@@ -1434,18 +1481,49 @@ function openAddModal() {
     sel.appendChild(o);
   });
   document.getElementById('newPlate').value = '';
-  document.getElementById('newVisitorName').value = '';
+  document.getElementById('newNameInput').value = '';
+  document.getElementById('newPhone').value = '';
+  document.getElementById('newEmail').value = '';
   document.getElementById('newType').value = 'owner';
-  document.getElementById('newVisitorNameField').style.display = 'none';
   document.getElementById('addModal').classList.remove('hidden');
+  toggleAddModalFields();
   setTimeout(() => document.getElementById('newPlate').focus(), 100);
+}
+
+function toggleAddModalFields() {
+  const type = document.getElementById('newType').value;
+  const nameField = document.getElementById('newNameField');
+  const label = document.getElementById('newNameLabel');
+  if (type === 'tenant') {
+    nameField.style.display = 'block';
+    label.textContent = 'Nombre del Arrendatario';
+    document.getElementById('newNameInput').placeholder = 'Nombre completo (actualiza el apto)';
+  } else if (type === 'visitor') {
+    nameField.style.display = 'block';
+    label.textContent = 'Nombre del Visitante';
+    document.getElementById('newNameInput').placeholder = 'Nombre completo (opcional)';
+  } else {
+    nameField.style.display = 'none';
+  }
+}
+
+function prefillContactFields() {
+  const selVal = document.getElementById('newApto').value;
+  if (!selVal) return;
+  const [tower, apto] = selVal.split('|');
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
+  if (!rec) return;
+  document.getElementById('newPhone').value = rec.phone || '';
+  document.getElementById('newEmail').value = rec.email || '';
 }
 
 function addPlate() {
   const plate = document.getElementById('newPlate').value.trim().toUpperCase();
   const selVal = document.getElementById('newApto').value;
   const type = document.getElementById('newType').value;
-  const visitorName = document.getElementById('newVisitorName').value.trim();
+  const nameInput = document.getElementById('newNameInput').value.trim();
+  const phoneInput = document.getElementById('newPhone').value.trim();
+  const emailInput = document.getElementById('newEmail').value.trim();
 
   if (!plate || plate.length < 4) { showToast('Ingrese una placa válida (mínimo 4 caracteres)', 'error'); return; }
   if (!selVal) { showToast('Seleccione un apartamento', 'error'); return; }
@@ -1465,13 +1543,66 @@ function addPlate() {
   const rec = db.find(r => r.tower === tower && r.apto === apto);
   if (!rec) return;
 
-  if (type === 'owner') rec.plates.push(plate);
-  else rec.visitors.push({ name: visitorName, plate });
+  if (type === 'owner') {
+    rec.plates.push(plate);
+  } else if (type === 'tenant') {
+    rec.plates.push(plate);
+    if (nameInput) { rec.tenant = nameInput; rec.tenantEdited = true; }
+  } else {
+    rec.visitors.push({ name: nameInput, plate });
+  }
+
+  if (phoneInput) rec.phone = phoneInput;
+  if (emailInput) rec.email = emailInput;
 
   changelog.push({ action: 'add', plate, tower, apto, type, date: new Date().toISOString(), by: currentRole });
   saveDB();
   closeModal('addModal');
   showToast(`✅ Placa ${plate} registrada en Apto ${apto}`, 'success');
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════
+// EDIT APARTMENT (solo Administración)
+// ═══════════════════════════════════════════════════════
+function openEditApto(tower, apto) {
+  if (currentRole !== 'admon') {
+    showToast('⛔ Solo Administración puede editar los datos del apartamento', 'error');
+    return;
+  }
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
+  if (!rec) return;
+  const modal = document.getElementById('editAptoModal');
+  modal.dataset.tower = tower;
+  modal.dataset.apto = apto;
+  document.getElementById('editAptoSubtitle').textContent = `Torre ${tower.replace('T','')} · Apto ${apto}`;
+  document.getElementById('editAptoOwner').value = rec.owner || '';
+  document.getElementById('editAptoTenant').value = rec.tenant || '';
+  document.getElementById('editAptoEmail').value = rec.email || '';
+  document.getElementById('editAptoPhone').value = rec.phone || '';
+  document.getElementById('editAptoDeposito').value = rec.deposito || '';
+  modal.classList.remove('hidden');
+}
+
+function confirmEditApto() {
+  if (currentRole !== 'admon') { closeModal('editAptoModal'); return; }
+  const modal = document.getElementById('editAptoModal');
+  const { tower, apto } = modal.dataset;
+  const rec = db.find(r => r.tower === tower && r.apto === apto);
+  if (!rec) { closeModal('editAptoModal'); return; }
+
+  rec.owner = document.getElementById('editAptoOwner').value.trim();
+  rec.tenant = document.getElementById('editAptoTenant').value.trim();
+  rec.email = document.getElementById('editAptoEmail').value.trim();
+  rec.phone = document.getElementById('editAptoPhone').value.trim();
+  rec.deposito = document.getElementById('editAptoDeposito').value.trim();
+  rec.ownerEdited = true;
+  rec.tenantEdited = true;
+
+  changelog.push({ action: 'edit', field: 'apto-completo', tower, apto, date: new Date().toISOString(), by: currentRole });
+  saveDB();
+  closeModal('editAptoModal');
+  showToast('✅ Apartamento actualizado', 'success');
   renderTable();
 }
 
@@ -1675,6 +1806,9 @@ document.getElementById('deleteModal').addEventListener('click', function(e) {
 });
 document.getElementById('editNameModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal('editNameModal');
+});
+document.getElementById('editAptoModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal('editAptoModal');
 });
 
 // Plate input format helper
